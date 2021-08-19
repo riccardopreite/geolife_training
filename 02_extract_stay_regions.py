@@ -1,4 +1,5 @@
 from datetime import datetime
+from numpy.core.function_base import linspace
 import pandas as pd
 import numpy as np
 import sklearn as sk
@@ -38,17 +39,32 @@ def get_centroid_coordinates(SP, r):
 def get_neighbor_grids(g, G):
     pass
 
-def meters_to_lat_lon_displacement(m, origin_latitude):
-    # TODO verificare se ha senso
-    lat = m/111111
-    lon = m/(111111 * cos(radians(origin_latitude)))
-    return lat, lon
-
-def grid_division(d: float):
+def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
     """
     d is the side length of a part of the grid.
+
     """
-    globe_max_coordinates = ((90.0, 180.0), (90.0, -180.0), (-90.0, -180.0), (-90.0, 180.0)) # NE, NW, SW, SE
+    # globe_max_coordinates = ((90.0, 180.0), (90.0, -180.0), (-90.0, -180.0), (-90.0, 180.0)) # NE, NW, SW, SE
+
+    delta = (d * 0.001) / 111
+
+    """
+    The following would be correct for creating a grid of the whole globe but it is impossible from a RAM point of view.
+    We must get the ranges in which latitude and longitude values exist in the dataset: 02_find_lat_lon_value_ranges.py
+
+    Results obtained:
+    - Max latitude in dataset:  64.751993
+    - Min latitude in dataset:  1.044024
+    - Max longitude in dataset:  179.9969416
+    - Min longitude in dataset:  121.739333333333
+    - Latitude ranges: ...
+    - Longitude ranges: ...
+    """
+
+    latitude_range: np.ndarray = np.arange(+65, 0, -delta)
+    longitude_range: np.ndarray = np.arange(+180.0, +120.0, -delta)
+
+    return latitude_range, longitude_range
 
 
 def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float) -> List[StayPoint]:
@@ -108,18 +124,37 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
         S_k: List[StayPoint] = stay_point_detection(traj_k, d_thresh, t_thresh)
         SP.append(S_k)
         print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
-    G = grid_division(d)
+    G_lat, G_lon = grid_division(d)
+    # latitude = y, longitude = x
+    G_lat_len = len(G_lat)
+    G_lon_len = len(G_lon)
+    G_lat_i = 0
+    while G_lat_i < (G_lat_len - 1):
+        G_lon_i = 0
+        while G_lon_i < (G_lon_len - 1):
+            # These 4 variables represent the grid square in position (G_lat_i, G_lon_i)
+            top_left = G_lat[G_lat_i], G_lon[G_lon_i]
+            top_right = G_lat[G_lat_i], G_lon[G_lon_i + 1]
+            bottom_left = G_lat[G_lat_i + 1], G_lon[G_lon_i]
+            bottom_right = G_lat[G_lat_i + 1], G_lon[G_lon_i + 1]
+
+            # ecc 
+            G_lon_i += 1
+        G_lat_i += 1
+
 
 SP: List[List[StayPoint]] = list()
 
 def main():
-    input_file: str = 'geolife_trajectories_1to12.csv'
+    input_file: str = 'geolife_trajectories_complete.csv'
     d_thresh: float = 100 # Meters
     t_thresh: float = 300 # Seconds
-    d: float = 500
+    d: float = 750
     df_trajectories = pd.read_csv(input_file)
-    users = np.unique(df_trajectories['user']) # users --> U
-    extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
+    # users = np.unique(df_trajectories['user']) # users --> U
+    print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
+    print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
+    # extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
 
 if __name__ == '__main__':
     main()
