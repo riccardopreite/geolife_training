@@ -57,13 +57,67 @@ def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
     - Min latitude in dataset:  1.044024
     - Max longitude in dataset:  179.9969416
     - Min longitude in dataset:  121.739333333333
-    - Latitude ranges: ...
-    - Longitude ranges: ...
+    - Latitude ranges: [1,65]
+    - Longitude ranges:
+        [2,3],
+        [4,6],
+        [7,13],
+        [24,25],
+        [37,38],
+        [75,131],
+        [133,134],
+        [135,136],
+        [142,143],
+        [149,150],
+        [174,180],
+        [-180,-121],
+        [-119,-117],
+        [-116,-115],
+        [-113,-112],
+        [-94,-93],
+        [-88,-87],
+        [-78,-77],
+        [-72,-70],
+        [-4,-3]
     """
+    # latitude_range_unique = [1,65]
+    longitude_range_unique = [
+        [2,3],
+        [4,6],
+        [7,13],
+        [24,25],
+        [37,38],
+        [75,131],
+        [133,134],
+        [135,136],
+        [142,143],
+        [149,150],
+        [174,180],
+        [-180,-121],
+        [-119,-117],
+        [-116,-115],
+        [-113,-112],
+        [-94,-93],
+        [-88,-87],
+        [-78,-77],
+        [-72,-70],
+        [-4,-3]
+    ]
+    latitude_range: np.ndarray = np.arange(+65, 1, -delta)
 
-    latitude_range: np.ndarray = np.arange(+65, 0, -delta)
-    longitude_range: np.ndarray = np.arange(+180.0, +120.0, -delta)
 
+    longitude_range: np.ndarray = np.arange(
+        longitude_range_unique[0][0],
+        longitude_range_unique[0][1],
+        +delta) #+delta
+    for lon_range in longitude_range_unique[1:]:
+        new_lon_grid = np.arange(
+            lon_range[0],
+            lon_range[1],
+            +delta)
+        longitude_range = np.concatenate((longitude_range, new_lon_grid))
+
+    print("Latitude Range x Longitude Range: ", (len(latitude_range) * len(longitude_range)))
     return latitude_range, longitude_range
 
 
@@ -84,7 +138,6 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
         current_points.append(p_i)
         keep = True
         while j < num_rows and keep:
-            print(i, j)
             row_j = traj_k.loc[j]
             p_j: MyPoint = convert_row_to_point(row_j)
             d_ij = distance(p1=p_i, p2=p_j)
@@ -122,13 +175,17 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
     for u_k in users[:1]:
         traj_k = trajectories[trajectories['user'] == u_k]
         S_k: List[StayPoint] = stay_point_detection(traj_k, d_thresh, t_thresh)
-        SP.append(S_k)
-        print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
+        SP.extend(S_k)
+        # print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
+    print("created sp")
+    #del trajectories
     G_lat, G_lon = grid_division(d)
+    print("created grid lat lon")
     # latitude = y, longitude = x
     G_lat_len = len(G_lat)
     G_lon_len = len(G_lon)
     G_lat_i = 0
+    newG = {}
     while G_lat_i < (G_lat_len - 1):
         G_lon_i = 0
         while G_lon_i < (G_lon_len - 1):
@@ -138,23 +195,58 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
             bottom_left = G_lat[G_lat_i + 1], G_lon[G_lon_i]
             bottom_right = G_lat[G_lat_i + 1], G_lon[G_lon_i + 1]
 
-            # ecc 
+            newG[str(top_left)+";"+str(top_right)+";"+str(bottom_left)+";"+str(bottom_right)] = {}
+
+            # ecc
             G_lon_i += 1
         G_lat_i += 1
 
+    print("created corner")
+    SP_len = len(SP)
+    sp_index = 0
+    while sp_index < SP_len:
+        sp = SP[sp_index]
+        # sp[0] #lat
+        # sp[1] #lon
+        print("start iterating grid")
+        for grid,key in newG:
+            key_splitted = key.split(";")
+            top_left = eval(key_splitted[0])
+            top_right = eval(key_splitted[1])
+            bottom_left = eval(key_splitted[2])
+            bottom_right = eval(key_splitted[3])
+            #if a sp is inside the 4 corner it will be added to tha3t grid and removed from SP
+            if (sp[0] >= bottom_right[0] and sp[0] <= top_left[0]) and ((sp[1] >= bottom_left[1] and sp[1] <= top_right[1])):
+                print("added ",sp," to ",key)
+                grid.append(sp)
+                SP.remove(sp)
+                sp_index -= 1
+        sp_index += 1
+        print("end iterating grid")
 
-SP: List[List[StayPoint]] = list()
+    print("SP len: ", len(SP))
+    print("number of grid: ", len(newG))
+    print("number of sp in 1st grid: ", len(newG[0]))
+    print("sp of first grid:")
+    print(newG[0])
+        #  maybe index increase/decrease can be removed
+        #  because for each stay point we iterate over all grids
+        #  so every sp iterated has been assagned to a grid
+
+# SP: List[List[StayPoint]] = list()
+SP: List[StayPoint] = list()
 
 def main():
     input_file: str = 'geolife_trajectories_complete.csv'
     d_thresh: float = 100 # Meters
     t_thresh: float = 300 # Seconds
-    d: float = 750
+    d: float = 600
     df_trajectories = pd.read_csv(input_file)
-    # users = np.unique(df_trajectories['user']) # users --> U
+    users = np.unique(df_trajectories['user']) # users --> U
     print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
     print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
-    # extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
+    # grid_division(d)
+    extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
 
 if __name__ == '__main__':
     main()
