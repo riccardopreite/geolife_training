@@ -172,11 +172,12 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
     """
     trajectories --> phi
     """
+    print("start creating sp")
     for u_k in users[:1]:
         traj_k = trajectories[trajectories['user'] == u_k]
         S_k: List[StayPoint] = stay_point_detection(traj_k, d_thresh, t_thresh)
         SP.extend(S_k)
-        # print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
+        print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
     print("created sp")
     #del trajectories
     G_lat, G_lon = grid_division(d)
@@ -209,13 +210,13 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
         # sp[0] #lat
         # sp[1] #lon
         print("start iterating grid")
-        for grid,key in newG:
+        for key,grid in newG.items():
             key_splitted = key.split(";")
             top_left = eval(key_splitted[0])
             top_right = eval(key_splitted[1])
             bottom_left = eval(key_splitted[2])
             bottom_right = eval(key_splitted[3])
-            #if a sp is inside the 4 corner it will be added to tha3t grid and removed from SP
+            #if a sp is inside the 4 corner it will be added to that grid and removed from SP
             if (sp[0] >= bottom_right[0] and sp[0] <= top_left[0]) and ((sp[1] >= bottom_left[1] and sp[1] <= top_right[1])):
                 print("added ",sp," to ",key)
                 grid.append(sp)
@@ -243,8 +244,8 @@ def main():
     d: float = 600
     df_trajectories = pd.read_csv(input_file)
     users = np.unique(df_trajectories['user']) # users --> U
-    print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
-    print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
+    # print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
+    # print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
     # grid_division(d)
     extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
 
