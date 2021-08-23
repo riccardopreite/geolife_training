@@ -1,10 +1,8 @@
 from datetime import datetime
-from numpy.core.function_base import linspace
 import pandas as pd
 import numpy as np
-import sklearn as sk
 import pytz
-from math import sqrt, cos, radians
+from math import sqrt
 from typing import Dict, List, Tuple
 from geopy.distance import great_circle
 from geopy.point import Point
@@ -54,11 +52,18 @@ class Region(object):
 
 
 def convert_row_to_point(row) -> MyPoint:
+    """
+    Takes in input a pd.Dataframe row and returns a MyPoint instance with the localized date.
+    """
     converted_date = datetime.strptime(row['time'], DATE_FORMAT)
     gmt_date = TZ.localize(converted_date)
     return MyPoint(row['lat'], row['lon'], row['alt'], gmt_date)
 
+
 def distance(p1: MyPoint, p2: MyPoint) -> float:
+    """
+    Computes the approximate distance (in meters) between p1 and p2 and returns it.
+    """
     # Cannot set altitude, geopy does not support it.
     gp_p1 = Point(latitude=p1.latitude, longitude=p1.longitude, altitude=0)
     gp_p2 = Point(latitude=p2.latitude, longitude=p2.longitude, altitude=0)
@@ -69,13 +74,59 @@ def distance(p1: MyPoint, p2: MyPoint) -> float:
     return sqrt(plain_distance**2 + altitude_delta**2)
 
 def timedelta(p1: MyPoint, p2: MyPoint) -> float:
+    """
+    Computes the time difference between the collection_date of p1 and p2.
+    """
     return float((p2.collection_date - p1.collection_date).seconds)
 
-def get_centroid_coordinates(SP, r):
-    pass
+def get_centroid_coordinates(grid_cell_in_region_center_key: str) -> Tuple[float, float]:
+    """
+    Returns the centroid coordinates for the given corner coordinates (encoded as a string, the argument of the function).
+    """
+    corner_coordinates: List[Tuple[float,float]] = list(map(lambda coord_couple: eval(coord_couple), grid_cell_in_region_center_key.split(";")))
+    top_left = corner_coordinates[0]
+    top_right = corner_coordinates[1]
+    bottom_left = corner_coordinates[2]
+    bottom_right = corner_coordinates[3]
+    center_lat, center_lon = np.average([
+        top_left[0], top_right[0], bottom_left[0], bottom_right[0]
+    ]), np.average([
+        top_left[1], top_right[1], bottom_left[1], bottom_right[1]
+    ])
+    
+    return center_lat, center_lon
 
-def get_neighbor_grids(g, G):
-    pass
+
+def get_neighbor_grids(g: str, G: Dict[str, List[int]], d: float) -> List[str]:
+    """
+    g is the key for accessing the grid cell for which neighboring cells must be found.
+    G is the whole grid.
+    d is the grid cell side (needed for finding neighbors).
+    """
+    corner_coordinates: List[Tuple[float,float]] = list(map(lambda coord_couple: eval(coord_couple), g.split(";")))
+    top_left = corner_coordinates[0]
+
+    gc_top_left = (top_left[0] + d, top_left[1] - d)
+    gc_bottom_left = (top_left[0], top_left[1] - d)
+    gc_top_right = (top_left[0] + d, top_left[1])
+    gc_bottom_right = (top_left[0], top_left[1])
+
+    neighbors_key_list: List[str] = list()
+
+    for i in range(3):
+        for j in range(3):
+            top_left = tuple(gc_top_left[0] - (d * i), gc_top_left[1] + (d * j))
+            top_right = tuple(gc_top_right[0] - (d * i), gc_top_right[1] + (d * j))
+            bottom_left = tuple(gc_bottom_left[0] - (d * i), gc_bottom_left[1] + (d * j))
+            bottom_right = tuple(gc_bottom_right[0] - (d * i), gc_bottom_right[1] + (d * j))
+            key_in_G = str(top_left) + ";" + str(top_right) + ";" + str(bottom_left) + ";" + str(bottom_right)
+            if key_in_G in G: # Iterates over G.keys()
+                neighbors_key_list.append(key_in_G)
+    
+    return neighbors_key_list
+
+
+
 
 def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -157,6 +208,7 @@ def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
 
     print("Latitude Range x Longitude Range: ", (len(latitude_range) * len(longitude_range)))
     return latitude_range, longitude_range
+
 
 def assign_stay_points_to_grid_cell(G_lat: np.ndarray, G_lon: np.ndarray) -> Dict[str, List[int]]:
     G_lat_len = len(G_lat)
@@ -256,10 +308,10 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
                     # Start again from i = j
 
                     stay_point: StayPoint = StayPoint(
-                        np.average([cp[0] for cp in current_points]),
-                        np.average([cp[1] for cp in current_points]),
-                        current_points[0][3],
-                        current_points[-1][3]
+                        np.average([cp.latitude for cp in current_points]),
+                        np.average([cp.longitude for cp in current_points]),
+                        current_points[0].collection_date,
+                        current_points[-1].collection_date
                     )
                     stay_points.append(stay_point)
                     i = j - 1
@@ -268,16 +320,36 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
     return stay_points
 
 
-def assign_region(G: Dict[str, List[int]]):
+def assign_region(G: Dict[str, List[int]], d: float) -> List[Region]:
     unassigned_stay_points_count: List[Tuple[str, int]] = list()
     for G_key, G_val in G.items():
         unassigned_stay_points_count.append(tuple(G_key, len(G_val)))
     unassigned_stay_points_count.sort(key=lambda t: t[1], reverse=True)
 
-    
+    regions: List[Region] = list()
+
+    while len(unassigned_stay_points_count) > 0:
+        """i is the key of the grid cell containing the maximum number of stay points."""
+        i = unassigned_stay_points_count[0][0]
+        center_lat, center_lon = get_centroid_coordinates(i)
+        
+        """
+        r contains at most 9 items which could possibly be keys for accessing stay point lists in G.
+        """
+        r = get_neighbor_grids(i, G, d) # r = G[i] U ng
+        for region in r:
+            unassigned_stay_points_count.remove(region)
+            for sp_index in G[region]:
+                SP[sp_index].region_id = len(regions)
+        
+        regions.append(Region(center_lat, center_lon))
+
+        unassigned_stay_points_count.sort(key=lambda t: t[1], reverse=True)
+
+    return regions    
 
 
-def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_thresh: float, d: float) -> list:
+def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_thresh: float, d: float) -> List[Region]:
     """
     trajectories --> phi
     """
@@ -297,7 +369,9 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
     print("number of sp in 1st grid: ", len(G[0]))
     print("sp of first grid:")
     print(G[0])
-    
+    regions = assign_region(G, d)
+
+    return regions
     
 
 """
@@ -310,17 +384,34 @@ List of regions
 """
 R = list()
 
+
 def main():
-    input_file: str = 'geolife_trajectories_complete.csv'
-    d_thresh: float = 100 # Meters
-    t_thresh: float = 300 # Seconds
+    """
+    Distance threshold in meters
+    """
+    d_thresh: float = 100
+
+    """
+    Time threshold in seconds
+    """
+    t_thresh: float = 300
+
+    """
+    Length of a grid cell side in meters
+    """
     d: float = 600
+
+    """
+    Input file
+    """
+    input_file: str = 'geolife_trajectories_complete.csv'
+
     df_trajectories = pd.read_csv(input_file)
     users = np.unique(df_trajectories['user']) # users --> U
     # print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
     # print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
     # grid_division(d)
-    extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
+    R = extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
 
 if __name__ == '__main__':
     main()
