@@ -1,2 +1,4 @@
 geolife*.csv
 Data/
+venv/
+.vscode/

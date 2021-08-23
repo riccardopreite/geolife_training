@@ -40,15 +40,22 @@ class StayPoint(object):
     def to_tuple(self) -> StayPointTuple:
         return self.latitude, self.longitude, self.time_of_arrival, self.time_of_leave, self.region_id
 
+    def to_csv_row(self) -> str:
+        return str(self.latitude) + "," + str(self.longitude) + "," + self.time_of_arrival + "," + self.time_of_leave + "," + self.region_id + "\n"
+
 
 class Region(object):
-    def __init__(self, latitude: float, longitude: float) -> None:
+    def __init__(self, region_id: int, latitude: float, longitude: float) -> None:
         super().__init__()
+        self.region_id = region_id
         self.latitude = latitude
         self.longitude = longitude
 
     def to_tuple(self) -> RegionTuple:
-        return self.latitude, self.longitude
+        return self.region_id, self.latitude, self.longitude
+    
+    def to_csv_row(self) -> str:
+        return str(self.region_id) + "," + str(self.latitude) + "," + str(self.longitude) + "\n"
 
 
 def convert_row_to_point(row) -> MyPoint:
@@ -342,7 +349,7 @@ def assign_region(G: Dict[str, List[int]], d: float) -> List[Region]:
             for sp_index in G[region]:
                 SP[sp_index].region_id = len(regions)
         
-        regions.append(Region(center_lat, center_lon))
+        regions.append(Region(len(regions), center_lat, center_lon))
 
         unassigned_stay_points_count.sort(key=lambda t: t[1], reverse=True)
 
@@ -406,12 +413,23 @@ def main():
     """
     input_file: str = 'geolife_trajectories_complete.csv'
 
+    """
+    Output files
+    """
+    output_file_sp: str = 'output_stay_points.csv'
+    output_file_regions: str = 'output_stay_regions.csv'
+
     df_trajectories = pd.read_csv(input_file)
     users = np.unique(df_trajectories['user']) # users --> U
-    # print("lat_max = ", df_trajectories['lat'].max(), "lat_min = ", df_trajectories['lat'].min())
-    # print("lon_max = ", df_trajectories['lon'].max(), "lon_min = ", df_trajectories['lon'].min())
-    # grid_division(d)
     R = extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
+
+    with open(output_file_sp, mode="w+", encoding="utf8") as file:
+        file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id\n")
+        file.writelines([sp.to_csv_row() for sp in SP])
+    
+    with open(output_file_regions, mode="w+", encoding="utf8") as file:
+        file.write("region_id,latitude,longitude\n")
+        file.writelines([r.to_csv_row() for r in R])
 
 if __name__ == '__main__':
     main()
