@@ -5,25 +5,63 @@ import numpy as np
 import sklearn as sk
 import pytz
 from math import sqrt, cos, radians
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from geopy.distance import great_circle
 from geopy.point import Point
 
-MyPoint = Tuple[float, float, float, datetime] # latitude, longitude, altitude, collection date
-StayPoint = Tuple[float, float, datetime, datetime] # latitude, longitude, time of arrival, time of leave
+MyPointTuple = Tuple[float, float, float, datetime] # latitude, longitude, altitude, collection date
+StayPointTuple = Tuple[float, float, datetime, datetime] # latitude, longitude, time of arrival, time of leave
+RegionTuple = Tuple[float, float] # latitude, longitude
+
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 TZ = pytz.timezone('GMT')
 
+
+class MyPoint(object):
+    def __init__(self, latitude: float, longitude: float, altitude: float, collection_date: datetime) -> None:
+        super().__init__()
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.collection_date = collection_date
+    
+    def to_tuple(self) -> MyPointTuple:
+        return self.latitude, self.longitude, self.altitude, self.collection_date
+
+
+class StayPoint(object):
+    def __init__(self, latitude: float, longitude: float, time_of_arrival: datetime, time_of_leave: datetime) -> None:
+        super().__init__()
+        self.latitude = latitude
+        self.longitude = longitude
+        self.time_of_arrival = time_of_arrival
+        self.time_of_leave = time_of_leave
+        self.region_id = -2
+
+    def to_tuple(self) -> StayPointTuple:
+        return self.latitude, self.longitude, self.time_of_arrival, self.time_of_leave, self.region_id
+
+
+class Region(object):
+    def __init__(self, latitude: float, longitude: float) -> None:
+        super().__init__()
+        self.latitude = latitude
+        self.longitude = longitude
+
+    def to_tuple(self) -> RegionTuple:
+        return self.latitude, self.longitude
+
+
 def convert_row_to_point(row) -> MyPoint:
     converted_date = datetime.strptime(row['time'], DATE_FORMAT)
     gmt_date = TZ.localize(converted_date)
-    return (row['lat'], row['lon'], row['alt'], gmt_date)
+    return MyPoint(row['lat'], row['lon'], row['alt'], gmt_date)
 
 def distance(p1: MyPoint, p2: MyPoint) -> float:
     # Cannot set altitude, geopy does not support it.
-    gp_p1 = Point(latitude=p1[0], longitude=p1[1], altitude=0)
-    gp_p2 = Point(latitude=p2[0], longitude=p2[1], altitude=0)
+    gp_p1 = Point(latitude=p1.latitude, longitude=p1.longitude, altitude=0)
+    gp_p2 = Point(latitude=p2.latitude, longitude=p2.longitude, altitude=0)
 
     plain_distance = great_circle(gp_p1, gp_p2).meters
     altitude_delta = (gp_p1.altitude - gp_p2.altitude)
@@ -31,7 +69,7 @@ def distance(p1: MyPoint, p2: MyPoint) -> float:
     return sqrt(plain_distance**2 + altitude_delta**2)
 
 def timedelta(p1: MyPoint, p2: MyPoint) -> float:
-    return float((p2[3] - p1[3]).seconds)
+    return float((p2.collection_date - p1.collection_date).seconds)
 
 def get_centroid_coordinates(SP, r):
     pass
@@ -120,6 +158,69 @@ def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
     print("Latitude Range x Longitude Range: ", (len(latitude_range) * len(longitude_range)))
     return latitude_range, longitude_range
 
+def assign_stay_points_to_grid_cell(G_lat: np.ndarray, G_lon: np.ndarray) -> Dict[str, List[int]]:
+    G_lat_len = len(G_lat)
+    G_lon_len = len(G_lon)
+    G: Dict[str, List[int]] = {}
+    G_lat_i = 0
+
+    while G_lat_i < (G_lat_len - 1):
+        G_lon_i = 0
+        while G_lon_i < (G_lon_len - 1):
+            # These 4 variables represent the grid square in position (G_lat_i, G_lon_i)
+            top_left = G_lat[G_lat_i], G_lon[G_lon_i]
+            top_right = G_lat[G_lat_i], G_lon[G_lon_i + 1]
+            bottom_left = G_lat[G_lat_i + 1], G_lon[G_lon_i]
+            bottom_right = G_lat[G_lat_i + 1], G_lon[G_lon_i + 1]
+
+            G_key = str(top_left) + ";" + str(top_right) + ";" + str(bottom_left) + ";" + str(bottom_right)
+
+            SP_len = len(SP)
+            sp_index = 0
+            while sp_index < SP_len:
+                sp = SP[sp_index] # sp[0], sp[1] are respectively latitude, longitude
+                if sp.region_id == -2:
+                    """
+
+                        TL ---- TR
+                        |        |
+                        |   sp   |
+                        |        | 
+                        BL ---- BR
+                    
+                    """
+                    
+                    """
+                    Equivalent checks:
+                    - (sp[0] >= bottom_left[0] and sp[0] <= top_left[0]) is the same as (sp[0] >= bottom_right[0] and sp[0] <= top_right[0])
+                    - (sp[1] >= bottom_left[1] and sp[1] <= bottom_right[1]) is the same as (sp[1] >= top_left[1] and sp[1] <= top_right[1])
+                    Other combinations exist from those written above.
+                    """ 
+                    if (sp[0] >= bottom_left[0] and sp[0] <= top_left[0]) and (sp[1] >= bottom_left[1] and sp[1] <= bottom_right[1]):
+                        """
+                        sp is in the grid element of G with the corner coordinates (top_left, top_right, bottom_left, bottom_right).
+                        Therefore:
+                        - we generate a key for G (G_key)
+                        - we generate a new empty list if the key did not exist previously in G
+                        - we append the sp_index to G[G_key]
+                        # - we remove sp from SP for freeing the memory (hence we decrement sp_index)
+                        """
+                        
+                        if G_key not in G.keys():
+                            G[G_key] = list()
+                        G[G_key].append(sp_index)
+                        # SP.pop(sp_index)
+                        # sp_index -= 1
+                        sp.region_id = -1
+                sp_index += 1
+                # END while sp_index < SP_len
+            G_lon_i += 1
+            # END while G_lon_i < (G_lon_len - 1)
+        G_lat_i += 1
+        # END while G_lat_i < (G_lat_len - 1)
+    
+    return G
+
 
 def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float) -> List[StayPoint]:
     """
@@ -154,7 +255,7 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
                     # Okay, current_points is a list of points collected near a stay point.
                     # Start again from i = j
 
-                    stay_point: StayPoint = (
+                    stay_point: StayPoint = StayPoint(
                         np.average([cp[0] for cp in current_points]),
                         np.average([cp[1] for cp in current_points]),
                         current_points[0][3],
@@ -167,6 +268,14 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
     return stay_points
 
 
+def assign_region(G: Dict[str, List[int]]):
+    unassigned_stay_points_count: List[Tuple[str, int]] = list()
+    for G_key, G_val in G.items():
+        unassigned_stay_points_count.append(tuple(G_key, len(G_val)))
+    unassigned_stay_points_count.sort(key=lambda t: t[1], reverse=True)
+
+    
+
 
 def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_thresh: float, d: float) -> list:
     """
@@ -177,65 +286,29 @@ def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_th
         traj_k = trajectories[trajectories['user'] == u_k]
         S_k: List[StayPoint] = stay_point_detection(traj_k, d_thresh, t_thresh)
         SP.extend(S_k)
-        print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k))
+        print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k), ", len(SP) = ", len(SP))
     print("created sp")
     #del trajectories
     G_lat, G_lon = grid_division(d)
     print("created grid lat lon")
     # latitude = y, longitude = x
-    G_lat_len = len(G_lat)
-    G_lon_len = len(G_lon)
-    G_lat_i = 0
-    newG = {}
-    while G_lat_i < (G_lat_len - 1):
-        G_lon_i = 0
-        while G_lon_i < (G_lon_len - 1):
-            # These 4 variables represent the grid square in position (G_lat_i, G_lon_i)
-            top_left = G_lat[G_lat_i], G_lon[G_lon_i]
-            top_right = G_lat[G_lat_i], G_lon[G_lon_i + 1]
-            bottom_left = G_lat[G_lat_i + 1], G_lon[G_lon_i]
-            bottom_right = G_lat[G_lat_i + 1], G_lon[G_lon_i + 1]
-
-            newG[str(top_left)+";"+str(top_right)+";"+str(bottom_left)+";"+str(bottom_right)] = {}
-
-            # ecc
-            G_lon_i += 1
-        G_lat_i += 1
-
-    print("created corner")
-    SP_len = len(SP)
-    sp_index = 0
-    while sp_index < SP_len:
-        sp = SP[sp_index]
-        # sp[0] #lat
-        # sp[1] #lon
-        print("start iterating grid")
-        for key,grid in newG.items():
-            key_splitted = key.split(";")
-            top_left = eval(key_splitted[0])
-            top_right = eval(key_splitted[1])
-            bottom_left = eval(key_splitted[2])
-            bottom_right = eval(key_splitted[3])
-            #if a sp is inside the 4 corner it will be added to that grid and removed from SP
-            if (sp[0] >= bottom_right[0] and sp[0] <= top_left[0]) and ((sp[1] >= bottom_left[1] and sp[1] <= top_right[1])):
-                print("added ",sp," to ",key)
-                grid.append(sp)
-                SP.remove(sp)
-                sp_index -= 1
-        sp_index += 1
-        print("end iterating grid")
-
-    print("SP len: ", len(SP))
-    print("number of grid: ", len(newG))
-    print("number of sp in 1st grid: ", len(newG[0]))
+    G = assign_stay_points_to_grid_cell(G_lat, G_lon)
+    print("number of grid cells: ", len(G))
+    print("number of sp in 1st grid: ", len(G[0]))
     print("sp of first grid:")
-    print(newG[0])
-        #  maybe index increase/decrease can be removed
-        #  because for each stay point we iterate over all grids
-        #  so every sp iterated has been assagned to a grid
+    print(G[0])
+    
+    
 
-# SP: List[List[StayPoint]] = list()
+"""
+List of generated stay points.
+"""
 SP: List[StayPoint] = list()
+
+"""
+List of regions
+"""
+R = list()
 
 def main():
     input_file: str = 'geolife_trajectories_complete.csv'
