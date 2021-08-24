@@ -2,3 +2,4 @@ geolife*.csv
 Data/
 venv/
 .vscode/
+__pycache__/

@@ -80,11 +80,13 @@ def distance(p1: MyPoint, p2: MyPoint) -> float:
 
     return sqrt(plain_distance**2 + altitude_delta**2)
 
+
 def timedelta(p1: MyPoint, p2: MyPoint) -> float:
     """
     Computes the time difference between the collection_date of p1 and p2.
     """
     return float((p2.collection_date - p1.collection_date).seconds)
+
 
 def get_centroid_coordinates(grid_cell_in_region_center_key: str) -> Tuple[float, float]:
     """
@@ -131,8 +133,6 @@ def get_neighbor_grids(g: str, G: Dict[str, List[int]], d: float) -> List[str]:
                 neighbors_key_list.append(key_in_G)
     
     return neighbors_key_list
-
-
 
 
 def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -205,12 +205,14 @@ def grid_division(d: float) -> Tuple[np.ndarray, np.ndarray]:
     longitude_range: np.ndarray = np.arange(
         longitude_range_unique[0][0],
         longitude_range_unique[0][1],
-        +delta) #+delta
+        +delta
+    ) #+delta
     for lon_range in longitude_range_unique[1:]:
         new_lon_grid = np.arange(
             lon_range[0],
             lon_range[1],
-            +delta)
+            +delta
+        )
         longitude_range = np.concatenate((longitude_range, new_lon_grid))
 
     print("Latitude Range x Longitude Range: ", (len(latitude_range) * len(longitude_range)))
@@ -255,7 +257,7 @@ def assign_stay_points_to_grid_cell(G_lat: np.ndarray, G_lon: np.ndarray) -> Dic
                     - (sp[1] >= bottom_left[1] and sp[1] <= bottom_right[1]) is the same as (sp[1] >= top_left[1] and sp[1] <= top_right[1])
                     Other combinations exist from those written above.
                     """ 
-                    if (sp[0] >= bottom_left[0] and sp[0] <= top_left[0]) and (sp[1] >= bottom_left[1] and sp[1] <= bottom_right[1]):
+                    if (sp.latitude >= bottom_left[0] and sp.latitude <= top_left[0]) and (sp.longitude >= bottom_left[1] and sp.longitude <= bottom_right[1]):
                         """
                         sp is in the grid element of G with the corner coordinates (top_left, top_right, bottom_left, bottom_right).
                         Therefore:
@@ -356,26 +358,28 @@ def assign_region(G: Dict[str, List[int]], d: float) -> List[Region]:
     return regions    
 
 
-def extract_stay_region(trajectories: pd.DataFrame, users, d_thresh: float, t_thresh: float, d: float) -> List[Region]:
-    """
-    trajectories --> phi
-    """
-    print("start creating sp")
-    for u_k in users[:1]:
-        traj_k = trajectories[trajectories['user'] == u_k]
-        S_k: List[StayPoint] = stay_point_detection(traj_k, d_thresh, t_thresh)
+def extract_stay_region(input_file_template: str, users: int, d_thresh: float, t_thresh: float, d: float) -> List[Region]:
+    print("[1/4] Generating Stay Points for users")
+    
+    for u_k in range(users):
+        trajectories_k = pd.read_csv(input_file_template.replace("x", str(u_k)))
+        S_k: List[StayPoint] = stay_point_detection(trajectories_k, d_thresh, t_thresh)
         SP.extend(S_k)
-        print("len(traj_k) = ", len(traj_k), ", len(S_k) = ", len(S_k), ", len(SP) = ", len(SP))
-    print("created sp")
+        print("- [", u_k + 1, "/", users, "] len(trajectories_k) = ", len(trajectories_k), ", len(S_k) = ", len(S_k), ", len(SP) = ", len(SP))
+    
     #del trajectories
+    print("[2/4] Generating the grid axes")
     G_lat, G_lon = grid_division(d)
-    print("created grid lat lon")
     # latitude = y, longitude = x
+
+    print("[3/4] Assigning Stay Points to grid cells")
     G = assign_stay_points_to_grid_cell(G_lat, G_lon)
     print("number of grid cells: ", len(G))
     print("number of sp in 1st grid: ", len(G[0]))
     print("sp of first grid:")
     print(G[0])
+
+    print("[4/4] Assigning Stay Points to regions")
     regions = assign_region(G, d)
 
     return regions
@@ -393,35 +397,26 @@ R = list()
 
 
 def main():
-    """
-    Distance threshold in meters
-    """
+    # Distance threshold in meters
     d_thresh: float = 100
 
-    """
-    Time threshold in seconds
-    """
+    # Time threshold in seconds
     t_thresh: float = 300
 
-    """
-    Length of a grid cell side in meters
-    """
+    # Length of a grid cell side in meters
     d: float = 600
 
-    """
-    Input file
-    """
-    input_file: str = 'geolife_trajectories_complete.csv'
+    # Total number of users
+    users: int = 182
 
-    """
-    Output files
-    """
+    # Input file (x must be replaced with the user number)
+    input_file: str = 'geolife_geolife_trajectories_user_x.csv'
+
+    # Output file for stay points
     output_file_sp: str = 'output_stay_points.csv'
     output_file_regions: str = 'output_stay_regions.csv'
 
-    df_trajectories = pd.read_csv(input_file)
-    users = np.unique(df_trajectories['user']) # users --> U
-    R = extract_stay_region(df_trajectories, users, d_thresh, t_thresh, d)
+    R = extract_stay_region(input_file, users, d_thresh, t_thresh, d)
 
     with open(output_file_sp, mode="w+", encoding="utf8") as file:
         file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id\n")
