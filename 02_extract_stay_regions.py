@@ -6,6 +6,7 @@ from math import sqrt
 from typing import Dict, List, Tuple
 from geopy.distance import great_circle
 from geopy.point import Point
+from os.path import exists as exists_file
 
 MyPointTuple = Tuple[float, float, float, datetime] # latitude, longitude, altitude, collection date
 StayPointTuple = Tuple[float, float, datetime, datetime] # latitude, longitude, time of arrival, time of leave
@@ -362,10 +363,15 @@ def extract_stay_region(input_file_template: str, users: int, d_thresh: float, t
     print("[1/4] Generating Stay Points for users")
     
     for u_k in range(users):
+        if u_k in USERS_TO_SKIP:
+            print("- [", u_k + 1, "/", users, "] Skipped")
+            continue
         trajectories_k = pd.read_csv(input_file_template.replace("x", str(u_k)))
         S_k: List[StayPoint] = stay_point_detection(trajectories_k, d_thresh, t_thresh)
         SP.extend(S_k)
         print("- [", u_k + 1, "/", users, "] len(trajectories_k) = ", len(trajectories_k), ", len(S_k) = ", len(S_k), ", len(SP) = ", len(SP))
+        with open(OUTPUT_FILE_STAYPOINTS, mode="a", encoding="utf8") as file:
+            file.writelines([sp.to_csv_row() for sp in S_k])
     
     #del trajectories
     print("[2/4] Generating the grid axes")
@@ -383,46 +389,50 @@ def extract_stay_region(input_file_template: str, users: int, d_thresh: float, t
     regions = assign_region(G, d)
 
     return regions
-    
 
-"""
-List of generated stay points.
-"""
+
+# List of generated stay points.
 SP: List[StayPoint] = list()
 
-"""
-List of regions
-"""
+# List of regions
 R = list()
 
+# Distance threshold in meters
+DISTANCE_THRESHOLD: float = 100
+
+# Time threshold in seconds
+TIME_THRESHOLD: float = 300
+
+# Length of a grid cell side in meters
+GRID_SIDE_LENGTH: float = 600
+
+# Total number of users
+USERS_CARDINALITY: int = 182
+
+# Users to skip from analysis
+USERS_TO_SKIP: List[int] = list()
+
+# Input file (x must be replaced with the user number)
+INPUT_FILE_TEMPLATE_NAME: str = 'geolife_geolife_trajectories_user_x.csv'
+
+# Output file for stay points
+OUTPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
+
+# Output file for regions
+OUTPUT_FILE_REGIONS: str = 'output_stay_regions.csv'
 
 def main():
-    # Distance threshold in meters
-    d_thresh: float = 100
+    if not exists_file(OUTPUT_FILE_STAYPOINTS):
+        with open(OUTPUT_FILE_STAYPOINTS, mode="w+", encoding="utf8") as file:
+            file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id\n")
 
-    # Time threshold in seconds
-    t_thresh: float = 300
+    if not exists_file(OUTPUT_FILE_REGIONS):
+        with open(OUTPUT_FILE_REGIONS, mode="w+", encoding="utf8") as file:
+            file.write("region_id,latitude,longitude\n")
 
-    # Length of a grid cell side in meters
-    d: float = 600
-
-    # Total number of users
-    users: int = 182
-
-    # Input file (x must be replaced with the user number)
-    input_file: str = 'geolife_geolife_trajectories_user_x.csv'
-
-    # Output file for stay points
-    output_file_sp: str = 'output_stay_points.csv'
-    output_file_regions: str = 'output_stay_regions.csv'
-
-    R = extract_stay_region(input_file, users, d_thresh, t_thresh, d)
-
-    with open(output_file_sp, mode="w+", encoding="utf8") as file:
-        file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id\n")
-        file.writelines([sp.to_csv_row() for sp in SP])
+    R = extract_stay_region(INPUT_FILE_TEMPLATE_NAME, USERS_CARDINALITY, DISTANCE_THRESHOLD, TIME_THRESHOLD, GRID_SIDE_LENGTH)
     
-    with open(output_file_regions, mode="w+", encoding="utf8") as file:
+    with open(OUTPUT_FILE_REGIONS, mode="w+", encoding="utf8") as file:
         file.write("region_id,latitude,longitude\n")
         file.writelines([r.to_csv_row() for r in R])
 
