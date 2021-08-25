@@ -1,3 +1,5 @@
 pandas==1.3.2
 numpy==1.21.2
 geopy==2.2.0
+matplotlibr==3.4.3
+scikit-learn==0.24.2
