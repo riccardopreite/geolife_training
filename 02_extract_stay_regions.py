@@ -30,19 +30,20 @@ class MyPoint(object):
 
 
 class StayPoint(object):
-    def __init__(self, latitude: float, longitude: float, time_of_arrival: datetime, time_of_leave: datetime) -> None:
+    def __init__(self, latitude: float, longitude: float, time_of_arrival: datetime, time_of_leave: datetime, user: int) -> None:
         super().__init__()
         self.latitude = latitude
         self.longitude = longitude
         self.time_of_arrival = time_of_arrival
         self.time_of_leave = time_of_leave
         self.region_id = -2
+        self.user = user
 
     def to_tuple(self) -> StayPointTuple:
         return self.latitude, self.longitude, self.time_of_arrival, self.time_of_leave, self.region_id
 
     def to_csv_row(self) -> str:
-        return str(self.latitude) + "," + str(self.longitude) + "," + self.time_of_arrival + "," + self.time_of_leave + "," + self.region_id + "\n"
+        return str(self.latitude) + "," + str(self.longitude) + "," + self.time_of_arrival.isoformat() + "," + self.time_of_leave.isoformat() + "," + str(self.region_id) + "," + str(self.user) + "\n"
 
 
 class Region(object):
@@ -284,7 +285,7 @@ def assign_stay_points_to_grid_cell(G_lat: np.ndarray, G_lon: np.ndarray) -> Dic
     return G
 
 
-def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float) -> List[StayPoint]:
+def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float, user: int) -> List[StayPoint]:
     """
     Conditions are that point must be far at most ( <= ) d_thresh and long at least ( >= ) t_thresh
     """
@@ -321,7 +322,8 @@ def stay_point_detection(traj_k: pd.DataFrame, d_thresh: float, t_thresh: float)
                         np.average([cp.latitude for cp in current_points]),
                         np.average([cp.longitude for cp in current_points]),
                         current_points[0].collection_date,
-                        current_points[-1].collection_date
+                        current_points[-1].collection_date,
+                        user
                     )
                     stay_points.append(stay_point)
                     i = j - 1
@@ -367,7 +369,7 @@ def extract_stay_region(input_file_template: str, users: int, d_thresh: float, t
             print("- [", u_k + 1, "/", users, "] Skipped")
             continue
         trajectories_k = pd.read_csv(input_file_template.replace("x", str(u_k)))
-        S_k: List[StayPoint] = stay_point_detection(trajectories_k, d_thresh, t_thresh)
+        S_k: List[StayPoint] = stay_point_detection(trajectories_k, d_thresh, t_thresh, u_k)
         SP.extend(S_k)
         print("- [", u_k + 1, "/", users, "] len(trajectories_k) = ", len(trajectories_k), ", len(S_k) = ", len(S_k), ", len(SP) = ", len(SP))
         with open(OUTPUT_FILE_STAYPOINTS, mode="a", encoding="utf8") as file:
@@ -424,7 +426,7 @@ OUTPUT_FILE_REGIONS: str = 'output_stay_regions.csv'
 def main():
     if not exists_file(OUTPUT_FILE_STAYPOINTS):
         with open(OUTPUT_FILE_STAYPOINTS, mode="w+", encoding="utf8") as file:
-            file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id\n")
+            file.write("latitude,longitude,time_of_arrival,time_of_leave,region_id,user\n")
 
     if not exists_file(OUTPUT_FILE_REGIONS):
         with open(OUTPUT_FILE_REGIONS, mode="w+", encoding="utf8") as file:
