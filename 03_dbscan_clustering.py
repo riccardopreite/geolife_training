@@ -1,107 +1,78 @@
+from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
 from sklearn import metrics
-from sklearn.datasets import make_blobs
-from sklearn.preprocessing import StandardScaler
-import math
 import shapefile as shp
 
+# Colors for plotting points onto the map
+COLORS: List[str] = ['blue','green','yellow','orange','pink','gray','brown','olive','indigo','springgreen','goldenrod','lightcoral']
 
-colors = ['blue','green','yellow','orange','pink','gray','brown','olive','indigo','springgreen','goldenrod','lightcoral']
+# Input file (output of 02_extract_stay_regions)
 INPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
 
-d = 600
-eps = 0.5
+# Map file name (both .shp and .dbf)
+MAP_FILE_NAME: str = "land_limits" # "country_limits"
+
+# Distance threshold between points (to be considered in the same cluster)
+DISTANCE_THRESHOLD = 100
 
 def main():
     stay_points = pd.read_csv(INPUT_FILE_STAYPOINTS)
-    X = pd.DataFrame(stay_points.drop(["time_of_arrival","time_of_leave","region_id","user"],axis=1))
-    eps = (d * 0.001) / 111
-    print("Delta of neighbors: ", eps)
+    X = pd.DataFrame(stay_points.drop(["time_of_arrival", "time_of_leave", "region_id", "user"], axis=1))
+    eps = (DISTANCE_THRESHOLD * 0.001) / 111
 
-    # X = stay_points_dropped
-
-    # X = scaler.fit_transform(stay_points_dropped)
-    cluster = DBSCAN(eps=eps,min_samples=10).fit_predict(X)
+    cluster_labels = DBSCAN(eps=eps, min_samples=5).fit_predict(X)
 
     X = np.array(X)
 
-    lon_min = -180 #int(X[:,1].min() - 1)
-    lon_max = 180 #int(X[:,1].max() + 1)
-    lat_min = -90 #int(X[:,0].min() - 1)
-    lat_max = 90 #int(X[:,0].max() + 1)
+    # Map bounds
+    lon_min = -180.0
+    lon_max = 180.0
+    lat_min = -90.0
+    lat_max = 90.0
 
-    BBox = (lon_min, lon_max, lat_min, lat_max)
+    bounds = (lon_min, lon_max, lat_min, lat_max)
 
-    # plotOnMap(cluster,X,BBox)
-    plotSHP(cluster,X,BBox)
-    # plot(cluster,X,BBox)
+    print(f"Silhouette Coefficient (should be in [-1,+1]): {metrics.silhouette_score(X, cluster_labels)}")
 
-def plotSHP(label,df,BBox):
-    myshp = open('test.shp', 'rb')
-    mydbf = open('test.dbf', 'rb')
-    sf = shp.Reader(shp=myshp,dbf=mydbf)
+    plot_points_and_map(cluster_labels, X, bounds)
+
+def plot_map():
+    map_shp_file = open(MAP_FILE_NAME + '.shp', 'rb')
+    map_dbf_file = open(MAP_FILE_NAME + '.dbf', 'rb')
+    map_file = shp.Reader(shp=map_shp_file, dbf=map_dbf_file)
     plt.figure()
-    for shape in sf.shapeRecords():
+    for shape in map_file.shapeRecords():
         x = [i[0] for i in shape.shape.points[:]]
         y = [i[1] for i in shape.shape.points[:]]
-        plt.plot(x,y)
+        plt.plot(x, y)
 
-    ruh_m = plt.imread('map.png')
-    u_labels = np.unique(label)
-    print(u_labels)
-    cluster = len(u_labels) - (1 if -1 in label else 0)
-    # plt.imshow(ruh_m, zorder=0, extent = BBox, aspect= 'equal')
-    for i in u_labels:
-        if i == -1:
-            # Black used for noise.
-            col = 'black'
-            plt.scatter(df[label == i , 1] , df[label == i , 0] , s=40, color = col)
-        else:
-            # col = colors[i]
-            # col = i
-            plt.scatter(df[label == i , 1] , df[label == i , 0] , s=40, label=i)
-        #drawing cluster
-        #calculating centroid
-        centroid = np.mean(df[label == i , :], axis=0)
+def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, float, float, float]):
+    plot_map()
+
+    # ruh_m = plt.imread('map.png')
+    # plt.imshow(ruh_m, zorder=0, extent = bounds, aspect= 'equal')
+    
+    u_cluster_labels: np.ndarray = np.unique(clusters)
+    tot_num_clusters = len(u_cluster_labels) - (1 if -1 in clusters else 0)
+
+    print("Found", tot_num_clusters, "clusters.")
+    for label in u_cluster_labels:
+        color = COLORS[label % len(COLORS)]
+        if label == -1:
+            color = 'black'
+        plt.scatter(X[clusters == label, 1], X[clusters == label, 0], s = 10, color = color)
+
+        # Calculating centroid for the cluster
+        centroid = np.mean(X[clusters == label , :], axis=0)
         #drawing centroid
-        plt.scatter(centroid[1] , centroid[0] , s = 2, color = 'red')
+        plt.scatter(centroid[1], centroid[0], s = 40, color = 'red')
 
-    plt.xlim(BBox[0],BBox[1])
-    plt.ylim(BBox[2],BBox[3])
-    plt.title("n_cluster: %d" %  cluster)
-    plt.legend()
-    plt.show()
-
-def plot(label,df,BBox):
-    #get unique labels
-    ruh_m = plt.imread('map.png')
-    u_labels = np.unique(label)
-    print(u_labels)
-    cluster = len(u_labels) - (1 if -1 in label else 0)
-    plt.imshow(ruh_m, zorder=0, extent = BBox, aspect= 'equal')
-    ruh_m = plt.imread('map.png')
-    for i in u_labels:
-        if i == -1:
-            # Black used for noise.
-            col = 'black'
-            plt.scatter(df[label == i , 1] , df[label == i , 0] , s=40, color = col)
-
-        else:
-            # col = colors[i]
-            # col = i
-            plt.scatter(df[label == i , 1] , df[label == i , 0] , s=40, label=i)
-        #drawing cluster
-        #calculating centroid
-        centroid = np.mean(df[label == i , :], axis=0)
-        #drawing centroid
-        plt.scatter(centroid[1] , centroid[0] , s = 2, color = 'red')
-
-    plt.xlim(BBox[0],BBox[1])
-    plt.ylim(BBox[2],BBox[3])
-    plt.title("n_cluster: %d" %  cluster)
+    plt.xlim(bounds[0], bounds[1])
+    plt.ylim(bounds[2], bounds[3])
+    plt.title(f"Points: {len(X)} - Clusters: {tot_num_clusters} - Outliers: {len(X[clusters == -1])}")
     plt.legend()
     plt.show()
 
@@ -109,16 +80,6 @@ def plot(label,df,BBox):
 if __name__ == '__main__':
     main()
 
-
-
-# print('Estimated number of clusters: %d' % n_clusters_)
-# print('Estimated number of noise points: %d' % n_noise_)
-# print("Homogeneity: %0.3f" % metrics.homogeneity_score(labels_true, labels))
-# print("Completeness: %0.3f" % metrics.completeness_score(labels_true, labels))
-# print("V-measure: %0.3f" % metrics.v_measure_score(labels_true, labels))
-# print("Adjusted Rand Index: %0.3f"
-      # % metrics.adjusted_rand_score(labels_true, labels))
-# print("Adjusted Mutual Information: %0.3f"
-      # % metrics.adjusted_mutual_info_score(labels_true, labels))
-# print("Silhouette Coefficient: %0.3f"
-      # % metrics.silhouette_score(X, labels))
+def plot_statistics(X: np.array, cluster_labels: np.ndarray):
+    u_cluster_labels: np.ndarray = np.unique(cluster_labels)
+    
