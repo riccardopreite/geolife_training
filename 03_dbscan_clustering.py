@@ -12,6 +12,9 @@ COLORS: List[str] = ['blue','green','yellow','orange','pink','gray','brown','oli
 # Input file (output of 02_extract_stay_regions)
 INPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
 
+# Output file (output of 03_dbscan_clustering)
+OUTPUT_FILE_STAYPOINTS: str = 'clustered.csv'
+
 # Map file name (both .shp and .dbf)
 MAP_FILE_NAME: str = "land_limits" # "country_limits"
 
@@ -67,8 +70,8 @@ def main():
 
     cluster_to_csv = pd.DataFrame(cluster_labels)
     to_save = pd.concat([X,cluster_to_csv],axis=1)
-    
-    to_save.to_csv("clustered.csv")
+
+    to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
     X = np.array(X)
 
     # Map bounds
