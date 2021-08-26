@@ -35,7 +35,7 @@ def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, 
 
     # ruh_m = plt.imread('map.png')
     # plt.imshow(ruh_m, zorder=0, extent = bounds, aspect= 'equal')
-    
+
     u_cluster_labels: np.ndarray = np.unique(clusters)
     tot_num_clusters = len(u_cluster_labels) - (1 if -1 in clusters else 0)
 
@@ -65,6 +65,10 @@ def main():
 
     cluster_labels = DBSCAN(eps=eps, min_samples=5).fit_predict(X)
 
+    cluster_to_csv = pd.DataFrame(cluster_labels)
+    to_save = pd.concat([X,cluster_to_csv],axis=1)
+    
+    to_save.to_csv("clustered.csv")
     X = np.array(X)
 
     # Map bounds
@@ -81,4 +85,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()  
+    main()
