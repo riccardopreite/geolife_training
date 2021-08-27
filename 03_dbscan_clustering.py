@@ -15,6 +15,9 @@ INPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
 # Output file (output of 03_dbscan_clustering)
 OUTPUT_FILE_STAYPOINTS: str = 'clustered.csv'
 
+# Output file of centroids (output of 03_dbscan_clustering)
+OUTPUT_FILE_CENTROIDS: str = 'centroids.csv'
+
 # Map file name (both .shp and .dbf)
 MAP_FILE_NAME: str = "land_limits" # "country_limits"
 
@@ -60,6 +63,16 @@ def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, 
     plt.legend()
     plt.show()
 
+def extract_centroid(df,labels):
+    unique_labels = np.unique(labels)
+    centroid_df = pd.DataFrame([])
+    df = np.array(df)
+    for label in unique_labels:
+        new_centroid = np.mean(df[labels == label , :], axis=0)
+        new_centroid = pd.DataFrame(new_centroid)
+        centroid_df = pd.concat([centroid_df,new_centroid],axis=0)
+
+    centroid_df.to_csv(OUTPUT_FILE_CENTROIDS)
 
 def main():
     stay_points = pd.read_csv(INPUT_FILE_STAYPOINTS)
@@ -67,6 +80,8 @@ def main():
     eps = (DISTANCE_THRESHOLD * 0.001) / 111
 
     cluster_labels = DBSCAN(eps=eps, min_samples=5).fit_predict(X)
+
+    extract_centroid(X,cluster_labels)
 
     cluster_to_csv = pd.DataFrame(cluster_labels)
     to_save = pd.concat([X,cluster_to_csv],axis=1)
