@@ -415,13 +415,13 @@ USERS_CARDINALITY: int = 182
 USERS_TO_SKIP: List[int] = list()
 
 # Input file (x must be replaced with the user number)
-INPUT_FILE_TEMPLATE_NAME: str = 'geolife_geolife_trajectories_user_x.csv'
+INPUT_FILE_TEMPLATE_NAME: str = '01_read_geo_output/user_data/geolife_geolife_trajectories_user_x.csv'
 
 # Output file for stay points
-OUTPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
+OUTPUT_FILE_STAYPOINTS: str = '02_extract_stay_regions_output/output_stay_points.csv'
 
 # Output file for regions
-OUTPUT_FILE_REGIONS: str = 'output_stay_regions.csv'
+OUTPUT_FILE_REGIONS: str = '02_extract_stay_regions_output/output_stay_regions.csv'
 
 def main():
     if not exists_file(OUTPUT_FILE_STAYPOINTS):

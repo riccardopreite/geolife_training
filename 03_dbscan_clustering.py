@@ -10,16 +10,16 @@ import math
 COLORS: List[str] = ['blue','green','yellow','orange','pink','gray','brown','olive','indigo','springgreen','goldenrod','lightcoral']
 
 # Input file (output of 02_extract_stay_regions)
-INPUT_FILE_STAYPOINTS: str = 'output_stay_points.csv'
+INPUT_FILE_STAYPOINTS: str = '02_extract_stay_regions_output/output_stay_points.csv'
 
 # Output file (output of 03_dbscan_clustering)
-OUTPUT_FILE_STAYPOINTS: str = 'clustered.csv'
+OUTPUT_FILE_STAYPOINTS: str = '03_dbscan_clustering_output/clustered.csv'
 
 # Output file of centroids (output of 03_dbscan_clustering)
-OUTPUT_FILE_CENTROIDS: str = 'centroids.csv'
+OUTPUT_FILE_CENTROIDS: str = '03_dbscan_clustering_output/centroids.csv'
 
 # Map file name (both .shp and .dbf)
-MAP_FILE_NAME: str = "land_limits" # "country_limits"
+MAP_FILE_NAME: str = "map_bounds/land_limits" # "country_limits"
 
 # Distance threshold between points (to be considered in the same cluster)
 DISTANCE_THRESHOLD = 100
@@ -81,10 +81,10 @@ def main():
 
     extract_centroid(X,cluster_labels)
 
-    cluster_to_csv = pd.DataFrame(cluster_labels)
+    cluster_to_csv = pd.DataFrame(cluster_labels,columns=["cluster"])
     to_save = pd.concat([X,cluster_to_csv],axis=1)
 
-    to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
+    to_save.to_csv(OUTPUT_FILE_STAYPOINTS,index=False)
     X = np.array(X)
 
     # Map bounds

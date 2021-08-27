@@ -14,7 +14,7 @@ def main():
     lon_unique = list()
 
     for i in range(total_num_users):
-        df = pd.read_csv(f'geolife_geolife_trajectories_user_{i}.csv')
+        df = pd.read_csv(f'01_read_geo_output/user_data/geolife_geolife_trajectories_user_{i}.csv')
 
         lat_unique_user = np.unique(df['lat'])
         lon_unique_user = np.unique(df['lon'])

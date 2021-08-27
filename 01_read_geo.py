@@ -62,13 +62,13 @@ def read_all_users(folder):
         df = read_user(os.path.join(folder,sf))
         df['user'] = int(sf)
         dfs.append(df)
-        df.to_csv(f'geolife_geolife_trajectories_user_{i}.csv', index=False)
+        df.to_csv(f'01_read_geo_output/user_data/geolife_geolife_trajectories_user_{i}.csv', index=False)
     result = pd.concat(dfs)
-    result.to_csv('geolife_trajectories_complete.csv', index=False)
+    result.to_csv('01_read_geo_output/geolife_trajectories_complete.csv', index=False)
     return result
 
 def main():
-    read_all_users("Data")
+    read_all_users("01_read_geo_output/Data")
 
 if __name__ == '__main__':
     main()

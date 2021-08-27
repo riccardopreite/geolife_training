@@ -2,7 +2,7 @@ import pandas as pd
 import requests
 import json
 # Input file  (output of 03_dbscan_clustering)
-INPUT_FILE_CLUSTERED = "clustered.csv"
+INPUT_FILE_CLUSTERED = "03_dbscan_clustering_output/clustered.csv"
 
 # HERE API KEY
 API_KEY = "XMJaKLYAY_k6eFJDWS7rXbb9snd7k7p2P5VDRA7o5J0"

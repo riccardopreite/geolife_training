@@ -1,5 +1,6 @@
-geolife*.csv
-Data/
+01_read_geo_output/user_data/geolife*.csv
+01_read_geo_output/geolife*.csv
+01_read_geo_output/Data/
 venv/
 .vscode/
 __pycache__/
