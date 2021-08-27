@@ -37,7 +37,7 @@ def plot_map():
 
 
 def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, float, float, float]):
-    plot_map()
+    # plot_map()
 
     # ruh_m = plt.imread('map.png')
     # plt.imshow(ruh_m, zorder=0, extent = bounds, aspect= 'equal')
@@ -48,14 +48,17 @@ def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, 
     print("Found", tot_num_clusters, "clusters.")
     for label in u_cluster_labels:
         color = COLORS[label % len(COLORS)]
+        # print("color choosen ", color)
+        size_point = 20
         if label == -1:
             color = 'black'
-        plt.scatter(X[clusters == label, 1], X[clusters == label, 0], s = 10, color = color)
+            size_point = 10
+        plt.scatter(X[clusters == label, 1], X[clusters == label, 0], s = size_point, color = color)
 
         # Calculating centroid for the cluster
         centroid = np.mean(X[clusters == label , :], axis=0)
         #drawing centroid
-        plt.scatter(centroid[1], centroid[0], s = 40, color = 'red')
+        plt.scatter(centroid[1], centroid[0], s = 10, color = 'red')
 
     plt.xlim(bounds[0], bounds[1])
     plt.ylim(bounds[2], bounds[3])
@@ -63,16 +66,20 @@ def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, 
     plt.legend()
     plt.show()
 
-def extract_centroid(df,labels):
+def extract_centroid(df: pd.DataFrame ,labels: np.ndarray):
     unique_labels = np.unique(labels)
-    centroid_df = pd.DataFrame([])
+    centroid_list = list()
     df = np.array(df)
     for label in unique_labels:
         new_centroid = np.mean(df[labels == label , :], axis=0)
-        new_centroid = pd.DataFrame(new_centroid)
-        centroid_df = pd.concat([centroid_df,new_centroid],axis=0)
+        centroid_list.append(new_centroid)
 
-    centroid_df.to_csv(OUTPUT_FILE_CENTROIDS)
+    centroid_df = np.stack(centroid_list)
+    centroid_df = pd.DataFrame(centroid_df,columns=["latitude","longitude"])
+    centroid_df["cluster"] = unique_labels.tolist()
+
+    centroid_df.to_csv(OUTPUT_FILE_CENTROIDS,index=False)
+
 
 def main():
     stay_points = pd.read_csv(INPUT_FILE_STAYPOINTS)
@@ -81,12 +88,12 @@ def main():
 
     cluster_labels = DBSCAN(eps=eps, min_samples=5).fit_predict(X)
 
-    extract_centroid(X,cluster_labels)
+    # extract_centroid(X,cluster_labels)
 
-    cluster_to_csv = pd.DataFrame(cluster_labels)
-    to_save = pd.concat([X,cluster_to_csv],axis=1)
+    # cluster_to_csv = pd.DataFrame(cluster_labels)
+    # to_save = pd.concat([X,cluster_to_csv],axis=1)
 
-    to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
+    # to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
     X = np.array(X)
 
     # Map bounds
