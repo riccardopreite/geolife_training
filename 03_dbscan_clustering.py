@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.cluster import DBSCAN
 from sklearn import metrics
 import shapefile as shp
-
+import math
 # Colors for plotting points onto the map
 COLORS: List[str] = ['blue','green','yellow','orange','pink','gray','brown','olive','indigo','springgreen','goldenrod','lightcoral']
 
@@ -37,24 +37,14 @@ def plot_map():
 
 
 def plot_points_and_map(clusters: np.ndarray, X: np.array, bounds: Tuple[float, float, float, float]):
-    # plot_map()
-
-    # ruh_m = plt.imread('map.png')
-    # plt.imshow(ruh_m, zorder=0, extent = bounds, aspect= 'equal')
+    plot_map()
 
     u_cluster_labels: np.ndarray = np.unique(clusters)
     tot_num_clusters = len(u_cluster_labels) - (1 if -1 in clusters else 0)
 
     print("Found", tot_num_clusters, "clusters.")
-    for label in u_cluster_labels:
-        color = COLORS[label % len(COLORS)]
-        # print("color choosen ", color)
-        size_point = 20
-        if label == -1:
-            color = 'black'
-            size_point = 10
-        plt.scatter(X[clusters == label, 1], X[clusters == label, 0], s = size_point, color = color)
-
+    plt.scatter(X[clusters == -1, 1], X[clusters == -1, 0], s = 10, color = 'black')
+    for label in u_cluster_labels[1:]:
         # Calculating centroid for the cluster
         centroid = np.mean(X[clusters == label , :], axis=0)
         #drawing centroid
@@ -85,15 +75,16 @@ def main():
     stay_points = pd.read_csv(INPUT_FILE_STAYPOINTS)
     X = pd.DataFrame(stay_points.drop(["time_of_arrival", "time_of_leave", "region_id", "user"], axis=1))
     eps = (DISTANCE_THRESHOLD * 0.001) / 111
+    radians_array = np.radians(X)
+    radians_eps = math.radians(eps)
+    cluster_labels = DBSCAN(eps=radians_eps, min_samples=3,metric='haversine',algorithm='ball_tree').fit_predict(radians_array)
 
-    cluster_labels = DBSCAN(eps=eps, min_samples=5).fit_predict(X)
+    extract_centroid(X,cluster_labels)
 
-    # extract_centroid(X,cluster_labels)
+    cluster_to_csv = pd.DataFrame(cluster_labels)
+    to_save = pd.concat([X,cluster_to_csv],axis=1)
 
-    # cluster_to_csv = pd.DataFrame(cluster_labels)
-    # to_save = pd.concat([X,cluster_to_csv],axis=1)
-
-    # to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
+    to_save.to_csv(OUTPUT_FILE_STAYPOINTS)
     X = np.array(X)
 
     # Map bounds
@@ -101,6 +92,7 @@ def main():
     lon_max = 180.0
     lat_min = -90.0
     lat_max = 90.0
+
 
     bounds = (lon_min, lon_max, lat_min, lat_max)
 
