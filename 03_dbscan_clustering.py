@@ -13,7 +13,7 @@ COLORS: List[str] = ['blue','green','yellow','orange','pink','gray','brown','oli
 INPUT_FILE_STAYPOINTS: str = '02_extract_stay_regions_output/output_stay_points.csv'
 
 # Output file (output of 03_dbscan_clustering)
-OUTPUT_FILE_STAYPOINTS: str = '03_dbscan_clustering_output/clustered.csv'
+OUTPUT_FILE_STAYPOINTS: str = '03_dbscan_clustering_output/clustered_stay_points.csv'
 
 # Output file of centroids (output of 03_dbscan_clustering)
 OUTPUT_FILE_CENTROIDS: str = '03_dbscan_clustering_output/centroids.csv'
