@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from os import environ
+from os import environ, path
 import googlemaps
 import json
 from geopy.distance import great_circle
@@ -16,81 +16,115 @@ def distance(p1: Point, p2: Point) -> float:
 
     return plain_distance
 
+# Categories
 
-# timezonefinder
+RESTAURANT_TYPES = ["bakery", "bar", "cafe", "drugstore", "liquor_store", "meal_delivery", "meal_takeway", "restaurant"]
 
-# ["results"][0]["name"]
-# ["results"][0]["types"]
-# ["results"][0]["place_id"]
-# ["results"][0]["vicinity"]
-# ["results"][0]["geometry"]["location"]["lat"]
-# ["results"][0]["geometry"]["location"]["lng"]
+LEISURE_TYPES = ["amusement_park", "aquarium", "art_gallery", "bowling_alley", "casino", "movie_theater", "museum", "night_club", "park", "shopping_mall", "spa", "stadium", "tourist_attraction", "zoo"]
 
-RESTAURANTS = ["bakery", "bar", "cafe", "drugstore", "liquor_store", "meal_delivery", "meal_takeway", "restaurant"]
+SPORT_TYPES = ["gym"]
 
-LEISURE = ["amusement_park", "aquarium", "art_gallery", "bowling_alley", "casino", "movie_theater", "museum", "night_club", "park", "shopping_mall", "spa", "stadium", "tourist_attraction", "zoo"]
-
-SPORT = ["gym"]
-
-TYPE_OF_POINT = {
-    "restaurants" : RESTAURANTS,
-    "leisure" : LEISURE,
-    "sport" : SPORT
+PLACE_CATEGORIES = {
+    "restaurants" : RESTAURANT_TYPES,
+    "leisure" : LEISURE_TYPES,
+    "sport" : SPORT_TYPES
 }
-
 
 # Input file  (output of 03_dbscan_clustering)
 INPUT_FILE_CLUSTERED = "03_dbscan_clustering_output/centroids.csv"
 
-# Output file  (output of 04_retrieve_centroids_information_gmaps)
+# Output file (output of 04_retrieve_centroids_information_gmaps)
 OUTPUT_FILE_POINTS_API = "04_retrieve_centroids_information_gmaps/points.csv"
+
+# Google Maps cached API Responses
+CACHE_GMAPS_RESPONSES = "04_retrieve_centroids_information_gmaps/gmaps_api_responses.json"
 
 # Radius for searching restaurants, leisure and sport places from the points.
 SEARCH_RADIUS = 500
 
-# 9 Columns name for resulting DataFrame
+# 9 Columns name in the resulting DataFrame
+COLUMNS = ["lat_centroid", "lon_centroid", "cluster_index", "place_name", "google_place_id", "place_address", "place_category", "place_type", "place_lat", "place_lon", "distance_to_centroid"]
 
-COLUMNS = ["lat_centroid", "lon_centroid", "cluster_index", "place_name", "google_place_id", "place_address", "place_lat", "place_lon", "distance_to_centroid"]
-
-
+# Cluster index representing outliers.
+OUTLIER_CLUSTER = -1
 
 def main():
-    # points = pd.read_csv(INPUT_FILE_CLUSTERED)
     gmaps_api_key = environ.get("GMAPS_API_KEY", default="")
     gmaps = googlemaps.Client(key=gmaps_api_key)
+    gmaps_cache = {}
+    if path.exists(CACHE_GMAPS_RESPONSES):
+        with open(CACHE_GMAPS_RESPONSES, mode="r", encoding="utf8") as cache_file:
+            gmaps_cache = json.loads(cache_file.read())
+        with open(CACHE_GMAPS_RESPONSES + ".bak", mode="w+", encoding="utf8") as backup_file:
+            backup_file.write(json.dumps(gmaps_cache))
 
-
-    clustered_centroids = pd.read_csv(INPUT_FILE_CLUSTERED)
-    full_json = {}
+    centroids_df = pd.read_csv(INPUT_FILE_CLUSTERED)
+    gmaps_api_responses = {}
 
     points = list()
 
-    for index, centroid in clustered_centroids.iterrows():
-        if centroid[2] == -1:
+    max_centroid_index = len(centroids_df) - 1
+    for index, centroid in centroids_df.iterrows():
+        print(f"@ Searching points for point {index}/{max_centroid_index} @")
+        # Rewriting result_json inside gmaps_api_responses every 5 centroids.
+        if index % 5 == 0:
+            print(f"---> Saving Google Maps API responses in the cache file ({CACHE_GMAPS_RESPONSES}).")
+            with open(CACHE_GMAPS_RESPONSES, "w+", encoding="utf8") as file:
+                result_json = json.dumps(gmaps_api_responses, indent=2)
+                file.write(result_json)
+
+        if centroid[2] == OUTLIER_CLUSTER:
+            print("---> This point is an outlier: SKIPPED.")
             continue
-        elif index > 5:
+
+        if index > 5:
             break
         
-        lat_lon = centroid[0],centroid[1]
+        lat_lon = centroid[0], centroid[1]
+        centroid_key = str(centroid[0]) + "," + str(centroid[1])
+        gmaps_api_responses[centroid_key] = {}
         p_start = Point(lat_lon)
 
-        for sub_type_key,sub_type in TYPE_OF_POINT.items():
+        for category_key, category in PLACE_CATEGORIES.items():
+            print(f"-> Category {category_key}")
             # equator
-            full_json[sub_type_key] = {}
+            gmaps_api_responses[centroid_key][category_key] = {}
             min_distance = 1000
-            point_resulted = ()
-            for place_type in sub_type:
-                full_json[sub_type_key][place_type] = {}
+            stored_result = ()
+            for place_type in category:
+                print(f"--> Place type {place_type}")
+                gmaps_api_responses[centroid_key][category_key][place_type] = {}
 
-                json_response = gmaps.places_nearby(
-                    location = lat_lon,
-                    radius = SEARCH_RADIUS,
-                    language = "en-GB",
-                    type = place_type
-                )
+                if centroid_key in gmaps_cache.keys() and \
+                    category_key in gmaps_cache[centroid_key].keys() and \
+                    place_type in gmaps_cache[centroid_key][category_key].keys():
+                    print(f"---> Places of place type {place_type}, category {category_key} of centroid {centroid_key} were found in the cache file.")
+                    # Saving in a variable called json_response to mimick the else branch.
+                    json_response = {} # gmaps_cache[centroid_key][category_key][place_type]
+                    json_response['results'] = list()
+                    cached_place = next(iter(gmaps_cache[centroid_key][category_key][place_type]), "")
+                    if cached_place != "":
+                        cached_place = gmaps_cache[centroid_key][category_key][place_type][cached_place]
+                        json_response['results'].append({
+                            "name": cached_place["results"][0]["name"],
+                            "place_id": cached_place["results"][0]["place_id"],
+                            "vicinity": cached_place["results"][0]["vicinity"],
+                            "geometry": {
+                                "location": {
+                                    "lat": cached_place["results"][0]["geometry"]["location"]["lat"],
+                                    "lng": cached_place["results"][0]["geometry"]["location"]["lng"]
+                                }
+                            }
+                        })
+                else:
+                    json_response = gmaps.places_nearby(
+                        location = lat_lon,
+                        radius = SEARCH_RADIUS,
+                        language = "en-GB",
+                        type = place_type
+                    )
 
                 if len(json_response['results']) > 0:
-                    
                     name = json_response["results"][0]["name"]
                     place_id = json_response["results"][0]["place_id"]
                     address = json_response["results"][0]["vicinity"]
@@ -99,27 +133,48 @@ def main():
                     
                     p_arrive = Point(lat_resulted,lon_resulted)
 
-                    full_json[sub_type_key][place_type][str(lat_resulted)+","+str(lon_resulted)] = json_response
+                    gmaps_api_responses[centroid_key][category_key][place_type][str(lat_resulted)+","+str(lon_resulted)] = json_response
                     
                     distance_between_points = distance(p_start,p_arrive)
 
                     if distance_between_points <= min_distance:
-                        
                         min_distance = distance_between_points
-                        point_resulted = (centroid[0],centroid[1],centroid[2],name,place_id,address,lat_resulted,lon_resulted,distance_between_points)
+                        stored_result = (
+                            centroid[0],
+                            centroid[1],
+                            centroid[2],
+                            name,
+                            place_id,
+                            address,
+                            category_key,
+                            place_type,
+                            lat_resulted,
+                            lon_resulted,
+                            distance_between_points
+                        )
 
+            if len(stored_result) > 0:
+                points.append(stored_result)
+            # END for place_type in category
+        # END for category_key, category in PLACE_CATEGORIES.items()
+    # END for index, centroid in centroids_df.iterrows()
 
-            if len(point_resulted) > 0:
-                points.append(point_resulted)
-
-    stack = np.stack(points)
-    points_df = pd.DataFrame(stack,columns=COLUMNS)
-
-    points_df.to_csv(OUTPUT_FILE_POINTS_API,index=False)
-
-    with open("full.json", "w+", encoding="utf8") as file:
-        result_json = json.dumps(full_json)
+    # Exporting gmaps_api_responses to JSON.
+    print(f"---> Saving Google Maps API responses in the cache file ({CACHE_GMAPS_RESPONSES}).")
+    with open(CACHE_GMAPS_RESPONSES, "w+", encoding="utf8") as file:
+        result_json = json.dumps(gmaps_api_responses, indent=2)
         file.write(result_json)
+
+    # Exporting points to CSV.
+    print(f"---> Saving to CSV the collected data inside {OUTPUT_FILE_POINTS_API}.")
+    points_numpyzed = np.stack(points)
+    points_df = pd.DataFrame(points_numpyzed, columns=COLUMNS)
+
+    points_df.to_csv(OUTPUT_FILE_POINTS_API, index=False)
+    # Workaround per evitare che la colonna cluster_index sia di float.
+    points_df = pd.read_csv(OUTPUT_FILE_POINTS_API, dtype={'cluster_index': int})
+    points_df.to_csv(OUTPUT_FILE_POINTS_API, index=False)
+
 
 if __name__ == '__main__':
     main()
