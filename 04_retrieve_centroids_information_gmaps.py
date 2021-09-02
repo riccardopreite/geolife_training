@@ -77,7 +77,7 @@ def main():
             print("---> This point is an outlier: SKIPPED.")
             continue
 
-        if index > 5:
+        if index > 100:
             break
         
         lat_lon = centroid[0], centroid[1]
@@ -125,11 +125,14 @@ def main():
                     )
 
                 if len(json_response['results']) > 0:
-                    name = json_response["results"][0]["name"]
-                    place_id = json_response["results"][0]["place_id"]
-                    address = json_response["results"][0]["vicinity"]
-                    lat_resulted = json_response["results"][0]["geometry"]["location"]["lat"]
-                    lon_resulted = json_response["results"][0]["geometry"]["location"]["lng"]
+                    res_0 = json_response["results"][0]
+                    name = res_0["name"] if "name" in res_0.keys() else "no-name"
+                    place_id = res_0["place_id"] if "place_id" in res_0.keys() else "no-place-id"
+                    address = res_0["vicinity"] if "vicinity" in res_0.keys() else "no-vicinity"
+                    if "geometry" in res_0.keys() and "location" in res_0["geometry"].keys():
+                        res_0_loc = res_0["geometry"]["location"]
+                        lat_resulted = res_0_loc["lat"] if "lat" in res_0_loc.keys() else "no-lat"
+                        lon_resulted = res_0_loc["lng"] if "lng" in res_0_loc.keys() else "no-lng"
                     
                     p_arrive = Point(lat_resulted,lon_resulted)
 
