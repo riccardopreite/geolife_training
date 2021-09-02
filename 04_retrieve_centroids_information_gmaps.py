@@ -104,15 +104,19 @@ def main():
                     json_response['results'] = list()
                     cached_place = next(iter(gmaps_cache[centroid_key][category_key][place_type]), "")
                     if cached_place != "":
-                        cached_place = gmaps_cache[centroid_key][category_key][place_type][cached_place]
+                        cached_place = gmaps_cache[centroid_key][category_key][place_type][cached_place]["results"][0]
+                        if "geometry" in cached_place.keys() and "location" in cached_place["geometry"].keys():
+                            cached_place_loc = cached_place["geometry"]["location"]
+                        else:
+                            cached_place_loc = {}
                         json_response['results'].append({
-                            "name": cached_place["results"][0]["name"],
-                            "place_id": cached_place["results"][0]["place_id"],
-                            "vicinity": cached_place["results"][0]["vicinity"],
+                            "name": cached_place["name"] if "name" in cached_place.keys() else "no-name",
+                            "place_id": cached_place["place_id"] if "place_id" in cached_place.keys() else "no-place-id",
+                            "vicinity": cached_place["vicinity"] if "vicinity" in cached_place.keys() else "vicinity",
                             "geometry": {
                                 "location": {
-                                    "lat": cached_place["results"][0]["geometry"]["location"]["lat"],
-                                    "lng": cached_place["results"][0]["geometry"]["location"]["lng"]
+                                    "lat": cached_place_loc["lat"] if "lat" in cached_place_loc.keys() else "no-lat",
+                                    "lng": cached_place_loc["lng"] if "lng" in cached_place_loc.keys() else "no-lng"
                                 }
                             }
                         })
