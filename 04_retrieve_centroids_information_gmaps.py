@@ -65,7 +65,7 @@ def main():
 
     max_centroid_index = len(centroids_df) - 1
     for index, centroid in centroids_df.iterrows():
-        print(f"@ Searching points for point {index}/{max_centroid_index} @")
+        print(f"> Searching points for point {index}/{max_centroid_index} @")
         # Rewriting result_json inside gmaps_api_responses every 5 centroids.
         if index % 5 == 0:
             print(f"---> Saving Google Maps API responses in the cache file ({CACHE_GMAPS_RESPONSES}).")
@@ -77,7 +77,7 @@ def main():
             print("---> This point is an outlier: SKIPPED.")
             continue
 
-        if index > 400:
+        if index > 800:
             break
         
         lat_lon = centroid[0], centroid[1]
@@ -98,7 +98,7 @@ def main():
                 if centroid_key in gmaps_cache.keys() and \
                     category_key in gmaps_cache[centroid_key].keys() and \
                     place_type in gmaps_cache[centroid_key][category_key].keys():
-                    print(f"---> Places of place type {place_type}, category {category_key} of centroid {centroid_key} were found in the cache file.")
+                    # print(f"---> Places of place type {place_type}, category {category_key} of centroid {centroid_key} were found in the cache file.")
                     # Saving in a variable called json_response to mimick the else branch.
                     json_response = {} # gmaps_cache[centroid_key][category_key][place_type]
                     json_response['results'] = list()
