@@ -77,7 +77,7 @@ def main():
             print("---> This point is an outlier: SKIPPED.")
             continue
 
-        if index > 800:
+        if index > 1000:
             break
         
         lat_lon = centroid[0], centroid[1]
