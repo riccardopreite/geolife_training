@@ -76,9 +76,6 @@ def main():
         if centroid[2] == OUTLIER_CLUSTER:
             print("---> This point is an outlier: SKIPPED.")
             continue
-
-        if index > 1400:
-            break
         
         lat_lon = centroid[0], centroid[1]
         centroid_key = str(centroid[0]) + "," + str(centroid[1])
