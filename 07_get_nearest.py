@@ -10,19 +10,23 @@ OUTPUT_FILE_NEAREST = "07_get_nearest/nearest_points.csv"
 cols = ["lat_centroid","lon_centroid","cluster_index","place_name","google_place_id","place_address","place_category","place_type","place_lat","place_lon","distance_to_centroid","time_of_arrival"]
 
 def main():
-    points_with_toa = pd.read_csv(INPUT_FILE_POINTS_WITH_TZ)
+    # Input dataset
+    points_with_toa_tz = pd.read_csv(INPUT_FILE_POINTS_WITH_TZ)
 
+    # Output dataset
     nearest_point = pd.DataFrame(columns=cols)
-    clusters = points_with_toa["cluster_index"].unique()
 
+    clusters = points_with_toa_tz["cluster_index"].unique()
+
+    # For each centroid we keep only the nearest point of interest (there can be at most 3 of them, we want 1).
     for cluster in clusters:
-        same_centroid_sp = points_with_toa[points_with_toa['cluster_index'] == cluster]
+        same_centroid_sp = points_with_toa_tz[points_with_toa_tz['cluster_index'] == cluster]
 
-        min_index = same_centroid_sp["distance_to_centroid"].idxmin(axis=1)
+        min_distance_point_index = same_centroid_sp["distance_to_centroid"].idxmin()
 
-        nearest_point = nearest_point.append(points_with_toa.loc[min_index],ignore_index=False)
+        nearest_point = nearest_point.append(points_with_toa_tz.loc[min_distance_point_index], ignore_index=False)
 
-    nearest_point.to_csv(OUTPUT_FILE_NEAREST,index=False)
+    nearest_point.to_csv(OUTPUT_FILE_NEAREST, index=False)
 
 if __name__ == '__main__':
     main()
