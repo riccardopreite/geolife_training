@@ -8,3 +8,4 @@ googlemaps==4.5.3
 timezonefinder==5.2.0
 pydot==1.4.2
 graphviz==0.17
+imbalanced-learn==0.8.0
