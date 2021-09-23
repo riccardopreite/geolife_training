@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
@@ -8,73 +9,104 @@ from sklearn import tree
 import pydot
 from six import StringIO
 from imblearn.over_sampling import RandomOverSampler
+from sklearn.preprocessing import OneHotEncoder
 
 # Input file (output of 08_create_HAR_hour)
-INPUT_FILE_NEAREST = "08_create_HAR_hour/create_HAR_hour.csv"
+INPUT_FILE_HAR = "08_create_HAR_hour/har_nearest.csv"
 
 # Output file (output of 09_decision_tree)
-OUTPUT_DECISION_TREE = "09_decision_tree/finalized_model_tree"
+OUTPUT_DECISION_TREE = "09_decision_tree/decisiontree.sav"
 
 # Output pdf file (output of 09_decision_tree)
 OUTPUT_DECISION_TREE_PDF = "09_decision_tree/decisiontree.pdf"
 
-
 # Columns of result
-# cols_y = ["place_category","place_type"]
-cols_y = ["place_category"]
-# "time_of_day","day_of_week","har","category_id" will remain
-cols_to_drop = ["lat_centroid","lon_centroid","cluster_index","place_name","google_place_id","place_address","place_category","place_type","place_lat","place_lon","distance_to_centroid","time_of_arrival","category_id"]
-# cols_to_stay = ["time_of_day","day_of_week","har"]
+cols_to_drop = ["cluster_index","place_name","google_place_id","place_address","place_type","place_lat","place_lon","distance_to_centroid","time_of_arrival"]
+
+# Classifier and oversampler
+CLASSIFIER = DecisionTreeClassifier(criterion="entropy", splitter="random", random_state=17)
+OVERSAMPLER = RandomOverSampler(sampling_strategy='minority', random_state=17)
 
 
-# Classifier
-CLASSIFIER = DecisionTreeClassifier(criterion="entropy",splitter="random",random_state=17)
+def oversample(X: pd.DataFrame, y: np.ndarray) -> tuple:
+    """
+    Oversamples the X and y and returns the ovesampled versions.
+    """
+    global OVERSAMPLER
 
-def train_tree(nearest_point_df):
-    # print(cols_to_drop)
-    y = nearest_point_df['category_id']
-    X = nearest_point_df.drop(cols_to_drop,axis=1)
-    
+    # fit and apply the transformation for oversampling
+    X_oversampled, y_oversampled = OVERSAMPLER.fit_resample(X, y)
 
-    oversample = RandomOverSampler(sampling_strategy='minority')
-    # fit and apply the transform
-    X_over, y_over = oversample.fit_resample(X, y)
-    
+    return X_oversampled, y_oversampled
 
-    X_train, X_test, y_train, y_test = train_test_split(X_over, y_over, train_size=0.70,test_size=0.30)
-    decision_tree = CLASSIFIER.fit(X_train, y_train)
 
+def train_tree(X: pd.DataFrame, y: np.ndarray) -> tuple:
+    """
+    Trains the tree on X and returns the oracle y and the predicted y.
+    """
+    global CLASSIFIER
+
+    # Splitting the dataset
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.70, test_size=0.30, random_state=17)
+
+    # Fitting
+    CLASSIFIER = CLASSIFIER.fit(X_train, y_train)
+
+    # Predicting
     y_pred = CLASSIFIER.predict(X_test)
-    return decision_tree,y_pred,y_test
+
+    return y_test, y_pred
+
 
 def save_decision_tree():
-    dateTimeObj = datetime.now()
-    date = str(dateTimeObj.year) + '-' + str(dateTimeObj.month) + '-' + str(dateTimeObj.day) + '-' + str(dateTimeObj.hour) + '-' + str(dateTimeObj.minute) + '-' + str(dateTimeObj.second)
-    filename = OUTPUT_DECISION_TREE + date +'.sav'
-    pickle.dump(CLASSIFIER, open(filename, 'wb'))
+    """
+    Saves a .sav file containing the model.
+    """
+    pickle.dump(CLASSIFIER, open(OUTPUT_DECISION_TREE, 'wb'))
 
-def save_printed_decision_tree(decision_tree):
+
+def save_printed_decision_tree():
+    """
+    Saves a .pdf file with the printed decision tree.
+    """
+    global CLASSIFIER
     dot_data = StringIO()
-    list = ("Hours","Movement","Day")
-    classList = ("Restaurants","Leisure","Sport")
-    tree.export_graphviz(decision_tree, out_file=dot_data,feature_names=list,class_names=classList)
+    features = ('latitude', 'longitude', 'time_of_day', 'day_of_week', 'har_bike', 'har_bus', 'har_car', 'har_still', 'har_walk')
+    targets_list = ("leisure", "restaurants", "sport")
+    tree.export_graphviz(CLASSIFIER, out_file=dot_data, feature_names=features, class_names=targets_list)
     graph = pydot.graph_from_dot_data(dot_data.getvalue())
 
     graph[0].write_pdf(OUTPUT_DECISION_TREE_PDF)  # must access graph's first element
 
 
 def main():
-    nearest_point = pd.read_csv(INPUT_FILE_NEAREST)
+    global CLASSIFIER
+    har_dataset = pd.read_csv(INPUT_FILE_HAR)
+
+    y_original = har_dataset.pop("place_category")
+    X_original = har_dataset.drop(cols_to_drop, axis=1)
+
+    X_oversampled, y_oversampled = oversample(X_original, y_original)
 
     # do dummy encoding
+    har_cols = pd.get_dummies(X_oversampled["har"], prefix="har")
+    one_hot_place_category = OneHotEncoder().fit_transform(y_oversampled.values.reshape(-1,1)).toarray()
 
-    decision_tree, y_pred,y_test = train_tree(nearest_point)
-    score = accuracy_score(y_test,y_pred)
-    right = accuracy_score(y_test,y_pred,normalize=False)
-    # save_decision_tree()
+    X_oversampled.drop(["har"], axis=1, inplace=True)
+    X = pd.concat([X_oversampled, har_cols], axis=1)
+    y = one_hot_place_category
 
-    save_printed_decision_tree(decision_tree)
-    print("Score IS ",score," right sample ", right)
+    y_test, y_pred = train_tree(X, y)
+    accuracy = accuracy_score(y_test, y_pred)
+    number_correct_samples = accuracy_score(y_test, y_pred, normalize=False)
+    print(f"Decision tree depth:\t\t{CLASSIFIER.get_depth()}\nTotal number of samples:\t{len(X_oversampled)}\nCorrectly predicted samples:\t{number_correct_samples}\nAccuracy:\t\t\t{accuracy * 100}%")
+    
+    print("Saving the model for later use...")
+    save_decision_tree()
+    
+    # print("Saving the decision tree (graphical)...")
+    # save_printed_decision_tree()
+
 
 if __name__ == '__main__':
     main()
