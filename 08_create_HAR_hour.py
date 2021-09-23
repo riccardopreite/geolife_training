@@ -1,26 +1,24 @@
 import pandas as pd 
 from datetime import datetime
-from random import randint
+from random import randint, seed
 
+har_map = {
+    1: "bike",
+    2: "car",
+    3: "bus",
+    4: "walk",
+    5: "still"
+}
 
 def get_har(category: str) -> str:
+    global har_map
+
     if category == "restaurant":
         har_code = randint(4, 5)
     else:
         har_code = randint(1, 5)
 
-    if har_code == 1:
-        return "bike"
-    elif har_code == 2:
-        return "car"
-    elif har_code == 3:
-        return "bus"
-    elif har_code == 4:
-        return "walk"
-    elif har_code == 5:
-        return "still"
-    else:
-        return ""
+    return har_map[har_code] if har_code in har_map.keys() else ""
 
 
 ##########
@@ -63,6 +61,7 @@ def generate_random_har(input_file: str, output_file: str):
 
 
 def main():
+    seed(17)
     print(f"Generating random human activities and adding time of day (in seconds) and day of week to {INPUT_FILE_NEAREST_POINTS}")
     generate_random_har(INPUT_FILE_NEAREST_POINTS, OUTPUT_FILE_HAR_NEAREST)
     print(f"Generating random human activities and adding time of day (in seconds) and day of week to {INPUT_FILE_POINTS_WITH_TOA_TZ}")
